@@ -15,29 +15,27 @@ def back_button():
             st.session_state.menu = "upload_data"
         st.rerun()
 
-# Helper functions for loading social networks
+#Helper function to load data
 def process_single_network(file, data_type="stock_returns"):
-    """
-    Process a network file. Handles stock returns correlation data and ensures non-negative edge weights.
-    Cleans column names to only include company names.
-
-    Parameters:
-    - file (str): Path to the CSV file.
-    - data_type (str): Defaults to "stock_returns" for this dataset.
-
-    Returns:
-    - pd.DataFrame: Processed edge list with "from", "to", and "weight" columns.
-    """
     try:
-        print(f"Processing file: {file} as {data_type}")
+        # 🚨 Debug: Check input type
+        st.write(f"Processing file of type: {type(file)}")
 
-        # Load the stock returns dataset
-        df = pd.read_csv(file)
+        # If `file` is already a DataFrame, use it directly
+        if isinstance(file, pd.DataFrame):
+            df = file
+        else:
+            # If `file` is a file-like object, read it as CSV
+            df = pd.read_csv(file)
 
+        st.write("✅ Data Loaded Successfully in `process_single_network()`")
+        st.dataframe(df.head())  # Show first few rows
+
+        # Ensure required column exists
         if "ret.adjusted.prices.ref.date" not in df.columns:
             raise ValueError("Dataset must contain 'ret.adjusted.prices.ref.date' as the first column.")
 
-        # Parse the date column and set it as the index
+        # Continue with the processing...
         df["ret.adjusted.prices.ref.date"] = pd.to_datetime(df["ret.adjusted.prices.ref.date"])
         df.set_index("ret.adjusted.prices.ref.date", inplace=True)
 
@@ -72,16 +70,18 @@ def process_single_network(file, data_type="stock_returns"):
         return single_network
 
     except Exception as e:
-        print(f"Error processing the file: {e}")
+        st.error(f"Error in `process_single_network()`: {e}")
         return None
-      
+
 # Function to fetch CSV from GitHub
 @st.cache_data
 def load_github_csv(url):
     try:
-        return pd.read_csv(url)
+        df = pd.read_csv(url)
+        st.write("✅ GitHub CSV Loaded Successfully!")
+        return df
     except Exception as e:
-        st.error(f"Failed to load file: {e}")
+        st.error(f"Failed to load file from GitHub: {e}")
         return None
       
 # Initialize session state
