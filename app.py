@@ -105,27 +105,31 @@ if st.session_state.menu == "main":
     
     if analysis_type != "-":
         st.session_state.analysis_type = analysis_type
-
+        
         # Ensure we only load data once
         if "G" not in st.session_state:
             github_raw_url = "https://raw.githubusercontent.com/andredspereira/rede-vision-stock-market/main/data.csv"
-            edgelist = load_github_csv(github_raw_url)         
-            
-            if edgelist is not None:
-                st.write("Processed Edgelist:")
-                st.dataframe(edgelist)
-
-                # Create NetworkX graph
-                G = nx.Graph()
-                for _, row in edgelist.iterrows():
-                    G.add_edge(row["from"], row["to"], weight=row["weight"])
-
-                # Save graph in session state
-                st.session_state.G = G
-
-                # Navigate to analysis
-                st.session_state.menu = "analysis"
-                st.rerun()
+            raw_data = load_github_csv(github_raw_url)  # Load the raw CSV file
+        
+            if raw_data is not None:
+                # Process the raw stock returns data into an edgelist
+                edgelist = process_single_network(raw_data)
+        
+                if edgelist is not None:
+                    st.write("Processed Edgelist:")
+                    st.dataframe(edgelist)
+        
+                    # Create NetworkX graph
+                    G = nx.Graph()
+                    for _, row in edgelist.iterrows():
+                        G.add_edge(row["from"], row["to"], weight=row["weight"])
+        
+                    # Save graph in session state
+                    st.session_state.G = G
+        
+                    # Navigate to analysis
+                    st.session_state.menu = "analysis"
+                    st.rerun()
               
 # Analysis Pages
 if st.session_state.menu == "analysis":
