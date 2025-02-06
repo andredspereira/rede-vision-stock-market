@@ -5,6 +5,16 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Initialize session state at the very top
+if "menu" not in st.session_state:
+    st.session_state.menu = "main"
+
+if "analysis_type" not in st.session_state:
+    st.session_state.analysis_type = None
+
+if "G" not in st.session_state:
+    st.session_state.G = None  # Ensure graph is initialized
+
 # Back button logic
 def back_button():
     """Function to display a back button and handle navigation."""
@@ -12,50 +22,31 @@ def back_button():
         if st.session_state.menu == "upload_data":
             st.session_state.menu = "main"
         elif st.session_state.menu == "analysis":
-            st.session_state.menu = "upload_data"
+            st.session_state.menu = "main"  # Ensure correct return navigation
         st.rerun()
 
-#Helper function to load data
+# Helper function to process data
 def process_single_network(file, data_type="stock_returns"):
     try:
-        # 🚨 Debug: Check input type
-        st.write(f"Processing file of type: {type(file)}")
-
         # If `file` is already a DataFrame, use it directly
-        if isinstance(file, pd.DataFrame):
-            df = file
-        else:
-            # If `file` is a file-like object, read it as CSV
-            df = pd.read_csv(file)
-
-        st.write("✅ Data Loaded Successfully in `process_single_network()`")
-        st.dataframe(df.head())  # Show first few rows
+        df = file if isinstance(file, pd.DataFrame) else pd.read_csv(file)
 
         # Ensure required column exists
         if "ret.adjusted.prices.ref.date" not in df.columns:
             raise ValueError("Dataset must contain 'ret.adjusted.prices.ref.date' as the first column.")
 
-        # Continue with the processing...
         df["ret.adjusted.prices.ref.date"] = pd.to_datetime(df["ret.adjusted.prices.ref.date"])
         df.set_index("ret.adjusted.prices.ref.date", inplace=True)
 
-        # Clean column names to keep only the company names
+        # Clean column names
         df.columns = [col.replace("ret.adjusted.prices.", "").replace(".L", "") for col in df.columns]
+        df = df.dropna(axis=1, how="all")  # Drop empty columns
+        df = df.fillna(method="ffill").fillna(method="bfill")  # Handle missing values
 
-        # Drop any columns that are completely empty
-        df = df.dropna(axis=1, how="all")
-
-        # Handle missing values by forward and backward filling
-        df = df.fillna(method="ffill").fillna(method="bfill")
-
-        # Compute the correlation matrix
+        # Compute correlation matrix
         corr_matrix = df.corr()
-
-        # Convert correlation matrix to edge list
         corr_stack = corr_matrix.stack().reset_index()
         corr_stack.columns = ["from", "to", "weight"]
-
-        # Transform weights to non-negative values (e.g., absolute correlations)
         corr_stack["weight"] = corr_stack["weight"].abs()
 
         # Remove duplicate edges for undirected graph
@@ -64,10 +55,8 @@ def process_single_network(file, data_type="stock_returns"):
         single_network[["from", "to"]] = pd.DataFrame(single_network["pair"].tolist(), index=single_network.index)
         single_network.drop(columns=["pair"], inplace=True)
 
-        # Filter out self-loops (edges where "from" == "to")
-        single_network = single_network[single_network["from"] != single_network["to"]]
-
-        return single_network
+        # Remove self-loops
+        return single_network[single_network["from"] != single_network["to"]]
 
     except Exception as e:
         st.error(f"Error in `process_single_network()`: {e}")
@@ -77,19 +66,10 @@ def process_single_network(file, data_type="stock_returns"):
 @st.cache_data
 def load_github_csv(url):
     try:
-        df = pd.read_csv(url)
-        st.write("✅ GitHub CSV Loaded Successfully!")
-        return df
+        return pd.read_csv(url)
     except Exception as e:
         st.error(f"Failed to load file from GitHub: {e}")
         return None
-      
-# Initialize session state
-if "menu" not in st.session_state:
-    st.session_state.menu = "main"
-
-if "analysis_type" not in st.session_state:
-    st.session_state.analysis_type = None
 
 # Main Page
 if st.session_state.menu == "main":
@@ -102,59 +82,38 @@ if st.session_state.menu == "main":
         options=["-", "Stock Market Analysis"],
         index=0
     )
-    
+
     if analysis_type != "-":
         st.session_state.analysis_type = analysis_type 
 
         # Ensure we only load data once
-        if "G" not in st.session_state:
+        if st.session_state.G is None:
             github_raw_url = "https://raw.githubusercontent.com/andredspereira/rede-vision-stock-market/main/data.csv"
-            raw_data = load_github_csv(github_raw_url)  # Load the raw CSV file
-        
+            raw_data = load_github_csv(github_raw_url)
+
             if raw_data is not None:
-                try:
-                    # 🚨 Debug: Check if raw_data is loaded correctly
-                    st.write("Raw Data (first few rows):")
-                    st.dataframe(raw_data.head())
-        
-                    # Process the single network edgelist
-                    edgelist = process_single_network(raw_data)
-        
-                    # 🚨 Debug: Check if edgelist is generated
-                    if edgelist is None or edgelist.empty:
-                        st.error("Error: `process_single_network()` returned an empty or None DataFrame.")
-                        st.stop()
-        
-                    # Display processed edgelist
-                    st.write("Processed Edgelist:")
-                    st.dataframe(edgelist)
-        
+                edgelist = process_single_network(raw_data)
+
+                if edgelist is not None and not edgelist.empty:
                     # Create NetworkX graph
                     G = nx.Graph()
                     for _, row in edgelist.iterrows():
                         G.add_edge(row["from"], row["to"], weight=row["weight"])
-        
+
                     # Save graph in session state
                     st.session_state.G = G
-        
-                    # Navigate to analysis with "Go to Analysis" button
-                    if st.button("Go to Analysis"):
-                        st.session_state.menu = "analysis"
-                        st.rerun()
-        
-                except Exception as e:
-                    st.error(f"Error processing the file: {e}")
+                    st.session_state.menu = "analysis"  # 🚀 Navigate directly without button
+                    st.rerun()
+                else:
+                    st.error("Processed edgelist is empty. Please check the data format.")
 
-        
-                      
-# Analysis Pages
+# Analysis Page
 if st.session_state.menu == "analysis":
     if st.session_state.analysis_type == "Stock Market Analysis":
         st.title("Stock Market Analysis")
 
         # Retrieve the graph from session state
         G = st.session_state.get("G", None)
-
         try:
             # Check for empty graph
             if G.number_of_edges() == 0 or G.number_of_nodes() == 0:
