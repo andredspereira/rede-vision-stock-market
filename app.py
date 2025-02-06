@@ -105,6 +105,7 @@ if st.session_state.menu == "main":
     
     if analysis_type != "-":
         st.session_state.analysis_type = analysis_type 
+
         # Ensure we only load data once
         if "G" not in st.session_state:
             github_raw_url = "https://raw.githubusercontent.com/andredspereira/rede-vision-stock-market/main/data.csv"
@@ -112,8 +113,17 @@ if st.session_state.menu == "main":
         
             if raw_data is not None:
                 try:
+                    # 🚨 Debug: Check if raw_data is loaded correctly
+                    st.write("Raw Data (first few rows):")
+                    st.dataframe(raw_data.head())
+        
                     # Process the single network edgelist
                     edgelist = process_single_network(raw_data)
+        
+                    # 🚨 Debug: Check if edgelist is generated
+                    if edgelist is None or edgelist.empty:
+                        st.error("Error: `process_single_network()` returned an empty or None DataFrame.")
+                        st.stop()
         
                     # Display processed edgelist
                     st.write("Processed Edgelist:")
@@ -134,7 +144,7 @@ if st.session_state.menu == "main":
         
                 except Exception as e:
                     st.error(f"Error processing the file: {e}")
-        
+
         
                       
 # Analysis Pages
