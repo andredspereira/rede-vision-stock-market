@@ -108,7 +108,7 @@ if st.session_state.menu == "main":
 
         # Ensure we only load data once
         if "G" not in st.session_state:
-            github_raw_url = "https://raw.githubusercontent.com/andredspereira/rede-vision---stock-market/main/data.csv"
+            github_raw_url = "https://raw.githubusercontent.com/andredspereira/rede-vision-stock-market/main/data.csv"
             edgelist = load_github_csv(github_raw_url)         
             
             if edgelist is not None:
